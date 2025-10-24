@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagg
 import { Crud, CrudController } from '@dataui/crud';
 import { Room } from '../../entities/room.entity';
 import { RoomService } from './room.service';
-import { CreateRoomDto, UpdateRoomDto, AddVideoDto, ProcessVideoDto } from './dto/room.dto';
+import { CreateRoomDto, UpdateRoomDto, AddVideoDto, AddVideosDto, ProcessVideoDto } from './dto/room.dto';
 import { AdminGuard } from '../../core/guards/auth-admin.guard';
 
 @Crud({
@@ -13,6 +13,13 @@ import { AdminGuard } from '../../core/guards/auth-admin.guard';
   dto: {
     create: CreateRoomDto,
     update: UpdateRoomDto,
+  },
+  query: {
+    join: {
+      videos: {
+        eager: true,
+      },
+    },
   },
   routes: {
     getManyBase: {
@@ -64,6 +71,15 @@ export class RoomController implements CrudController<Room> {
   @ApiResponse({ status: 201, description: 'Video agregado' })
   async addVideo(@Param('roomId') roomId: number, @Body() dto: AddVideoDto): Promise<any> {
     return await this.service.addVideoToRoom(roomId, dto);
+  }
+
+  @Post(':roomId/add-videos')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Agregar múltiples URLs de videos a la sala' })
+  @ApiResponse({ status: 201, description: 'Videos agregados' })
+  async addVideos(@Param('roomId') roomId: number, @Body() dto: AddVideosDto): Promise<any> {
+    return await this.service.addVideosToRoom(roomId, dto);
   }
 
   @Get(':roomId/videos')

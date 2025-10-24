@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber, IsArray, ArrayMinSize, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateRoomDto {
@@ -56,6 +57,18 @@ export class AddVideoDto {
   @IsNotEmpty()
   @IsString()
   facebookUrl: string;
+}
+
+export class AddVideosDto {
+  @ApiProperty({
+    description: 'Array de URLs de videos de Facebook',
+    example: ['https://www.facebook.com/watch/?v=123456789', 'https://www.facebook.com/watch/?v=987654321'],
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  facebookUrls: string[];
 }
 
 export class ProcessVideoDto {

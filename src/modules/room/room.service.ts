@@ -4,7 +4,7 @@ import { TypeOrmCrudService } from '@dataui/crud-typeorm';
 import { Repository } from 'typeorm';
 import { Room } from '../../entities/room.entity';
 import { RoomVideo } from '../../entities/room-video.entity';
-import { CreateRoomDto, UpdateRoomDto, AddVideoDto } from './dto/room.dto';
+import { CreateRoomDto, UpdateRoomDto, AddVideoDto, AddVideosDto } from './dto/room.dto';
 import { FacebookScraperService } from '../../Services/facebook-scraper.service';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -68,6 +68,23 @@ export class RoomService extends TypeOrmCrudService<Room> {
     });
 
     return await this.roomVideoRepo.save(roomVideo);
+  }
+
+  async addVideosToRoom(roomId: number, dto: AddVideosDto): Promise<RoomVideo[]> {
+    const room = await this.repo.findOne({ where: { id: roomId } });
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    const videos = dto.facebookUrls.map(url => 
+      this.roomVideoRepo.create({
+        facebookUrl: url,
+        status: 'pending',
+        roomId: roomId,
+      })
+    );
+
+    return await this.roomVideoRepo.save(videos);
   }
 
   async getRoomVideos(roomId: number): Promise<RoomVideo[]> {
