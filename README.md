@@ -75,7 +75,12 @@ SECRET_ADMIN=your_admin_secret_key
 # Server Port
 PORT=3020
 
+```
+
 # Testing data
+```
+NODE_ENV='development'
+
 DATABASE_HOST='aws-1-us-east-1.pooler.supabase.com'
 DATABASE_NAME='postgres'
 DATABASE_USER='postgres.rqevkoefjxlklczbheqf'
@@ -239,17 +244,7 @@ El sistema detecta automáticamente la plataforma y ajusta:
 - Las cookies se encriptan con AES-256-GCM antes de guardar
 - Solo administradores pueden crear salas y procesar videos
 - El acceso a la sala es público con el código
-- Los videos descargados son públicos (considera autenticación para contenido privado)
-
-## Consideraciones Legales
-
-⚠️ **AVISO IMPORTANTE:**
-
-- Usar cookies de una cuenta para descargar contenido puede violar los TOS de Meta
-- Asegúte de tener consentimiento explícito del administrador de la cuenta
-- Asegúrate de tener permisos para descargar el contenido
-- Cumple con las leyes locales de derechos de autor
-- Implementa políticas de uso y procesos de takedown
+- Los videos descargados son públicos
 
 ## Limitaciones
 
