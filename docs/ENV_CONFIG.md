@@ -21,7 +21,7 @@ Copia el resultado y agrégalo a tu archivo `.env`.
 ## Configuración completa del .env
 
 ```env
-# Database Configuration
+# Database Configuration (Supabase testing DB)
 DATABASE_HOST='aws-0-us-east-2.pooler.supabase.com'
 DATABASE_NAME='postgres'
 DATABASE_USER='postgres.bupjctquyydnydnsdkeg'
@@ -33,10 +33,10 @@ DATABASE_POOLER='base-pooler.x'
 # Cookie Secret Key (32 bytes hex)
 COOKIE_SECRET_KEY='c4be57c3a7519f2d965eecf7c4a087d6a63ca28030a7fe7f0f60019bf8350c27'
 
-# JWT Secret (add your JWT secret here)
-JWT_SECRET='your-jwt-secret-here'
+# Admin Secret Key (32 bytes hex)
+SECRET_ADMIN='d5b85538e7c68d70930cb984ae82696411292113f292069d8c8bbb90b6a30928'
 
 # Server Port
-PORT=3000
+PORT=3020
 ```
 

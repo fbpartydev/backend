@@ -254,7 +254,14 @@ export class RoomService extends TypeOrmCrudService<Room> {
         ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' 
         : 'ffmpeg';
       
-      const ffmpegCommand = `"${ffmpegPath}" -i "${videoPath}" -i "${audioPath}" -c:v libx264 -preset fast -crf 23 -profile:v baseline -level 3.0 -c:a aac -profile:a aac_low -b:a 128k -ar 44100 -ac 2 -map 0:v:0 -map 1:a:0 -shortest -movflags +faststart "${outputPath}"`;
+      const isWindows = process.platform === 'win32';
+      const escapePath = (path: string) => isWindows ? `"${path}"` : path.replace(/ /g, '\\ ');
+      
+      const videoPathEscaped = escapePath(videoPath);
+      const audioPathEscaped = escapePath(audioPath);
+      const outputPathEscaped = escapePath(outputPath);
+      
+      const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -i ${audioPathEscaped} -c:v libx264 -preset fast -crf 23 -profile:v baseline -level 3.0 -c:a aac -profile:a aac_low -b:a 128k -ar 44100 -ac 2 -map 0:v:0 -map 1:a:0 -shortest -movflags +faststart ${outputPathEscaped}`;
       
       this.logger.log(`Running FFmpeg command: ${ffmpegCommand}`);
       const { stdout, stderr } = await execAsync(ffmpegCommand);
