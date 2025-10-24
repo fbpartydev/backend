@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, BadRequestException, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, BadRequestException, Patch, Delete } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Crud, CrudController } from '@dataui/crud';
 import { Room } from '../../entities/room.entity';
@@ -64,6 +64,18 @@ export class RoomController implements CrudController<Room> {
     return room;
   }
 
+  @Get('video/code/:code')
+  @ApiOperation({ summary: 'Obtener video por código (público)' })
+  @ApiResponse({ status: 200, description: 'Video encontrado' })
+  @ApiResponse({ status: 404, description: 'Video no encontrado' })
+  async getVideoByCode(@Param('code') code: string): Promise<any> {
+    const video = await this.service.getVideoByCode(code);
+    if (!video) {
+      throw new BadRequestException('Video not found');
+    }
+    return video;
+  }
+
   @Post(':roomId/add-video')
   @UseGuards(AdminGuard)
   @ApiBearerAuth()
@@ -95,23 +107,19 @@ export class RoomController implements CrudController<Room> {
   @ApiOperation({ summary: 'Procesar y descargar un video' })
   @ApiResponse({ status: 200, description: 'Video procesado' })
   async processVideo(@Param('videoId') videoId: number): Promise<any> {
-    const video = await this.service.processVideo(videoId);
-    const publicUrl = await this.service.getVideoPublicUrl(videoId);
-    return {
-      ...video,
-      publicUrl,
-    };
+    return await this.service.processVideo(videoId);
   }
 
   @Get('videos/:videoId/public-url')
-  @ApiOperation({ summary: 'Obtener URL pública del video' })
-  @ApiResponse({ status: 200, description: 'URL pública' })
+  @ApiOperation({ summary: 'Obtener URL pública del video y thumbnail' })
+  @ApiResponse({ status: 200, description: 'URLs públicas' })
   async getVideoPublicUrl(@Param('videoId') videoId: number): Promise<any> {
     const url = await this.service.getVideoPublicUrl(videoId);
     if (!url) {
       throw new BadRequestException('Video not available');
     }
-    return { publicUrl: url };
+    const thumbnailUrl = await this.service.getThumbnailPublicUrl(videoId);
+    return { publicUrl: url, thumbnailUrl };
   }
 
   @Patch('videos/:videoId/mark-watched')
@@ -124,6 +132,20 @@ export class RoomController implements CrudController<Room> {
       throw new BadRequestException('Video not found');
     }
     return video;
+  }
+
+  @Delete('videos/:videoId')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Eliminar video por ID' })
+  @ApiResponse({ status: 200, description: 'Video eliminado exitosamente' })
+  @ApiResponse({ status: 404, description: 'Video no encontrado' })
+  async deleteVideo(@Param('videoId') videoId: number): Promise<any> {
+    const result = await this.service.deleteVideo(videoId);
+    if (!result) {
+      throw new BadRequestException('Video not found');
+    }
+    return { message: 'Video deleted successfully' };
   }
 }
 

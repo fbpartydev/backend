@@ -71,11 +71,14 @@ export class FacebookScraperService {
     if (!cookies) return { success: false, error: 'No cookie stored' };
 
     let browser: puppeteer.Browser | null = null;
-    try {
-      browser = await puppeteer.launch({ 
-        headless: true, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-      });
+    let retries = 3;
+    
+    while (retries > 0) {
+      try {
+        browser = await puppeteer.launch({ 
+          headless: true, 
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+        });
       
       const page = await browser.newPage();
       
@@ -117,7 +120,7 @@ export class FacebookScraperService {
       });
       
       await page.setCookie(...cookies);
-      await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
 
       const title = await page.evaluate(() => {
         const video = document.querySelector('video');
@@ -248,8 +251,23 @@ export class FacebookScraperService {
         const mp4Urls = videoUrls.filter(url => url.includes('.mp4') && !url.includes('m3u8'));
         
         if (mp4Urls.length > 0) {
-          const cleanUrl = this.removeRangeParams(mp4Urls[0]);
-          const videoMeta = extractMetadata(mp4Urls[0]);
+          const videosWithMeta = mp4Urls.map(url => ({
+            url,
+            meta: extractMetadata(url)
+          })).filter(v => v.meta.duration && v.meta.duration > 30);
+          
+          if (videosWithMeta.length === 0) {
+            this.logger.warn('No videos with valid duration found');
+            return { success: false, error: 'No valid video found' };
+          }
+          
+          videosWithMeta.sort((a, b) => (b.meta.duration || 0) - (a.meta.duration || 0));
+          
+          const selectedVideo = videosWithMeta[0];
+          const cleanUrl = this.removeRangeParams(selectedVideo.url);
+          const videoMeta = selectedVideo.meta;
+          
+          this.logger.log(`Selected video with longest duration: ${videoMeta.duration}s [${videoMeta.videoId}]`);
           
           let audioUrl: string | undefined;
           
@@ -368,14 +386,26 @@ export class FacebookScraperService {
       this.logger.warn(`Failed to extract video from ${pageUrl}`);
       
       return { success: false, error: 'No video URL found' };
-    } catch (err) {
-      this.logger.error('Error extracting video', err);
-      return { success: false, error: err.message };
-    } finally {
-      if (browser) {
-        await browser.close();
+      } catch (err) {
+        this.logger.error(`Error extracting video (attempt ${4 - retries}/3)`, err.message);
+        
+        if (browser) {
+          await browser.close();
+          browser = null;
+        }
+        
+        retries--;
+        
+        if (retries === 0) {
+          return { success: false, error: err.message };
+        }
+        
+        this.logger.log(`Retrying... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
+    
+    return { success: false, error: 'Max retries reached' };
   }
 
   private removeRangeParams(url: string): string {

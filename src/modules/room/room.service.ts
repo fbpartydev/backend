@@ -61,7 +61,9 @@ export class RoomService extends TypeOrmCrudService<Room> {
       throw new Error('Room not found');
     }
 
+    const code = this.generateVideoCode();
     const roomVideo = this.roomVideoRepo.create({
+      code,
       facebookUrl: dto.facebookUrl,
       status: 'pending',
       roomId: roomId,
@@ -78,6 +80,7 @@ export class RoomService extends TypeOrmCrudService<Room> {
 
     const videos = dto.facebookUrls.map(url => 
       this.roomVideoRepo.create({
+        code: this.generateVideoCode(),
         facebookUrl: url,
         status: 'pending',
         roomId: roomId,
@@ -103,6 +106,7 @@ export class RoomService extends TypeOrmCrudService<Room> {
 
     try {
       video.status = 'processing';
+      video.error = null;
       await this.roomVideoRepo.save(video);
 
       const result = await this.scraper.extractVideoUrlFromFacebook(video.facebookUrl);
@@ -131,7 +135,24 @@ export class RoomService extends TypeOrmCrudService<Room> {
       }
       
       video.localPath = finalPath;
+      
+      const thumbnailPath = await this.generateThumbnail(finalPath, videoId);
+      if (thumbnailPath) {
+        video.thumbnailPath = thumbnailPath;
+      }
+      
+      const fileName = path.basename(finalPath);
+      const port = process.env.PORT || 3020;
+      const host = process.env.HOST || 'localhost';
+      video.publicUrl = `http://${host}:${port}/videos/${fileName}`;
+      
+      if (thumbnailPath) {
+        const thumbnailFileName = path.basename(thumbnailPath);
+        video.thumbnailUrl = `http://${host}:${port}/videos/${thumbnailFileName}`;
+      }
+      
       video.status = 'completed';
+      video.error = null;
       
       await this.roomVideoRepo.save(video);
       return video;
@@ -157,6 +178,18 @@ export class RoomService extends TypeOrmCrudService<Room> {
     return `http://${host}:${port}/videos/${fileName}`;
   }
 
+  async getThumbnailPublicUrl(videoId: number): Promise<string | null> {
+    const video = await this.roomVideoRepo.findOne({ where: { id: videoId } });
+    if (!video || !video.thumbnailPath) {
+      return null;
+    }
+
+    const fileName = path.basename(video.thumbnailPath);
+    const port = process.env.PORT || 3020;
+    const host = process.env.HOST || 'localhost';
+    return `http://${host}:${port}/videos/${fileName}`;
+  }
+
   async markVideoAsWatched(videoId: number): Promise<RoomVideo | null> {
     const video = await this.roomVideoRepo.findOne({ where: { id: videoId } });
     if (!video) {
@@ -166,6 +199,34 @@ export class RoomService extends TypeOrmCrudService<Room> {
     video.watched = true;
     await this.roomVideoRepo.save(video);
     return video;
+  }
+
+  async deleteVideo(videoId: number): Promise<boolean> {
+    const video = await this.roomVideoRepo.findOne({ where: { id: videoId } });
+    if (!video) {
+      return false;
+    }
+
+    if (video.localPath && fs.existsSync(video.localPath)) {
+      try {
+        fs.unlinkSync(video.localPath);
+        this.logger.log(`Deleted video file: ${video.localPath}`);
+      } catch (error) {
+        this.logger.error(`Error deleting video file: ${video.localPath}`, error);
+      }
+    }
+
+    if (video.thumbnailPath && fs.existsSync(video.thumbnailPath)) {
+      try {
+        fs.unlinkSync(video.thumbnailPath);
+        this.logger.log(`Deleted thumbnail file: ${video.thumbnailPath}`);
+      } catch (error) {
+        this.logger.error(`Error deleting thumbnail file: ${video.thumbnailPath}`, error);
+      }
+    }
+
+    await this.roomVideoRepo.remove(video);
+    return true;
   }
 
   private async downloadVideo(url: string, videoId: number): Promise<string> {
@@ -290,8 +351,49 @@ export class RoomService extends TypeOrmCrudService<Room> {
     }
   }
 
+  private async generateThumbnail(videoPath: string, videoId: number): Promise<string | null> {
+    const videosDir = path.join(process.cwd(), 'videos');
+    const thumbnailFileName = `thumbnail_${videoId}_${Date.now()}.jpg`;
+    const thumbnailPath = path.join(videosDir, thumbnailFileName);
+
+    try {
+      const ffmpegPath = process.platform === 'win32' 
+        ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' 
+        : 'ffmpeg';
+      
+      const isWindows = process.platform === 'win32';
+      const escapePath = (path: string) => isWindows ? `"${path}"` : path.replace(/ /g, '\\ ');
+      
+      const videoPathEscaped = escapePath(videoPath);
+      const thumbnailPathEscaped = escapePath(thumbnailPath);
+      
+      const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -ss 00:00:01 -vframes 1 -q:v 2 ${thumbnailPathEscaped}`;
+      
+      this.logger.log(`Generating thumbnail: ${ffmpegCommand}`);
+      await execAsync(ffmpegCommand);
+      
+      this.logger.log(`Thumbnail generated successfully`);
+      return thumbnailPath;
+    } catch (error) {
+      this.logger.error(`Error generating thumbnail:`, error);
+      return null;
+    }
+  }
+
+  async getVideoByCode(code: string): Promise<RoomVideo | null> {
+    return await this.roomVideoRepo
+      .createQueryBuilder('video')
+      .leftJoinAndSelect('video.room', 'room')
+      .where('video.code = :code', { code })
+      .getOne();
+  }
+
   private generateRoomCode(): string {
     return crypto.randomBytes(4).toString('hex').toUpperCase();
+  }
+
+  private generateVideoCode(): string {
+    return crypto.randomBytes(3).toString('hex').toUpperCase();
   }
 }
 
