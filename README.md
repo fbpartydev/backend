@@ -1,33 +1,21 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# FBparty Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend para descargar y servir videos de Facebook (incluyendo videos privados) usando cookies encriptadas.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Descripción
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Este sistema permite:
+- Guardar cookies de Facebook encriptadas (AES-256-GCM)
+- Extraer URLs de videos de Facebook usando Puppeteer
+- Descargar videos con audio completo usando FFmpeg
+- Crear salas para organizar múltiples videos
+- Servir videos a través de una API REST
 
 ## Prerequisitos
 
-### 1. FFmpeg (requerido para combinar video + audio)
+### 1. FFmpeg (Requerido)
+
+El sistema requiere FFmpeg para combinar el video y audio que Facebook sirve por separado.
 
 **Windows:**
 ```powershell
@@ -36,91 +24,269 @@ winget install ffmpeg
 
 O descarga manual desde: https://www.gyan.dev/ffmpeg/builds/
 
-Verifica instalación:
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Verificar instalación:**
 ```bash
 ffmpeg -version
 ```
 
-### 2. Variables de entorno
+### 2. Node.js y npm
 
-Crea un archivo `.env` con:
+Requerido Node.js 18+ y npm 9+
+
+## Instalación
+
+```bash
+npm install
+```
+
+## Configuración
+
+### Variables de Entorno
+
+Crea un archivo `.env` en la raíz del proyecto:
+
 ```env
-COOKIE_SECRET_KEY=tu_clave_aqui
-DATABASE_HOST=...
-DATABASE_NAME=...
-DATABASE_USER=...
-DATABASE_PASSWORD=...
-DATABASE_PORT=...
+# Database Configuration
+DATABASE_HOST=your_db_host
+DATABASE_NAME=postgres
+DATABASE_USER=your_db_user
+DATABASE_PASSWORD=your_db_password
+DATABASE_PORT=5432
+DATABASE_SSLMODE=require
+
+# Cookie Secret Key (32 bytes hex)
+# Genera una con: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+COOKIE_SECRET_KEY=your_secret_key_here
+
+# Admin Secret Key (32 bytes hex)
+SECRET_ADMIN=your_admin_secret_key
+
+# Server Port
+PORT=3020
+
+# Testing data
+DATABASE_HOST='aws-1-us-east-1.pooler.supabase.com'
+DATABASE_NAME='postgres'
+DATABASE_USER='postgres.rqevkoefjxlklczbheqf'
+DATABASE_PORT='6543'
+DATABASE_PASSWORD='aGm*NF_5KD_8@CU'
+DATABASE_SSLMODE='require'
+DATABASE_POOLER='base-pooler.x'
+
+SECRET_ADMIN='d5b85538e7c68d70930cb984ae82696411292113f292069d8c8bbb90b6a30928'
+COOKIE_SECRET_KEY='31c00355abb88e6b47da65cd78018eedbff0ee9e9062a3e6d7f18409d8871b7b'
 ```
 
-## Project setup
+### Generar Claves Secretas
 
 ```bash
-$ npm install
+# Generar COOKIE_SECRET_KEY
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# Generar SECRET_ADMIN
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Compile and run the project
+## Uso
+
+### 1. Iniciar el servidor
 
 ```bash
-# development
-$ npm run start
+# Development
+npm run start:dev
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Production
+npm run start:prod
 ```
 
-## Run tests
+### 2. Configurar Cookies de Facebook
+
+#### Obtener Cookies
+
+En Chrome:
+1. Abre DevTools (F12)
+2. Ve a Application → Cookies → https://www.facebook.com
+3. Exporta las cookies relevantes (c_user, xs, sb, datr, etc.) a JSON
+
+O usa la extensión "EditThisCookie" para exportar todas las cookies.
+
+#### Subir Cookies
+
+**POST** `/admin/upload-cookie`
+
+**Headers:**
+```
+Authorization: Bearer <token_admin>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "cookies": [
+    {
+      "name": "c_user",
+      "value": "...",
+      "domain": ".facebook.com",
+      "path": "/",
+      "expires": 1712345678,
+      "httpOnly": true,
+      "secure": true
+    }
+  ]
+}
+```
+
+### 3. Crear Sala y Agregar Videos
+
+#### Crear Sala
+
+**POST** `/rooms/create`
+
+```json
+{
+  "name": "Mi Sala de Videos",
+  "description": "Videos favoritos"
+}
+```
+
+#### Agregar Video
+
+**POST** `/rooms/:roomId/add-video`
+
+```json
+{
+  "facebookUrl": "https://www.facebook.com/watch/?v=123456789"
+}
+```
+
+#### Procesar Video (Descargar)
+
+**POST** `/rooms/videos/:videoId/process`
+
+Esto descargará el video y lo combinará con audio usando FFmpeg.
+
+#### Obtener Sala por Código
+
+**GET** `/rooms/code/:code`
+
+Retorna la sala con todos sus videos procesados.
+
+### 4. Reproducir Video en Frontend
+
+```html
+<video controls>
+  <source src="http://localhost:3020/videos/combined_1_123456789.mp4" type="video/mp4">
+</video>
+```
+
+## Endpoints Principales
+
+### Admin
+
+- `POST /admin/login` - Login de administrador
+- `POST /admin/upload-cookie` - Subir cookies de Facebook
+- `POST /admin/validate-cookie` - Validar cookies
+- `POST /admin/extract-video` - Extraer URL de video
+
+### Rooms
+
+- `POST /rooms/create` - Crear sala
+- `GET /rooms/code/:code` - Obtener sala por código
+- `POST /rooms/:roomId/add-video` - Agregar video a sala
+- `GET /rooms/:roomId/videos` - Listar videos de sala
+- `POST /rooms/videos/:videoId/process` - Procesar video
+- `GET /rooms/videos/:videoId/public-url` - Obtener URL pública
+
+## Estados del Video
+
+- `pending` - URL agregada, esperando procesamiento
+- `processing` - Descargando el video
+- `completed` - Video descargado exitosamente
+- `failed` - Error al descargar el video
+
+## Comportamiento Técnico
+
+### Procesamiento de Videos
+
+1. Se extrae la URL del video desde Facebook usando Puppeteer
+2. Se detecta y descarga el stream de audio separado
+3. Se combinan video y audio usando FFmpeg con:
+   - Codec H.264 Baseline Profile (compatible con navegadores)
+   - Codec AAC-LC (audio de alta calidad)
+   - Fast start para streaming
+
+### Compatibilidad Multi-Plataforma
+
+El sistema detecta automáticamente la plataforma y ajusta:
+- **Windows**: Ruta completa a `C:\ffmpeg\bin\ffmpeg.exe`
+- **Linux/Mac**: Usa `ffmpeg` del PATH
+- Escapa rutas correctamente según el SO
+
+## Seguridad
+
+- Las cookies se encriptan con AES-256-GCM antes de guardar
+- Solo administradores pueden crear salas y procesar videos
+- El acceso a la sala es público con el código
+- Los videos descargados son públicos (considera autenticación para contenido privado)
+
+## Consideraciones Legales
+
+⚠️ **AVISO IMPORTANTE:**
+
+- Usar cookies de una cuenta para descargar contenido puede violar los TOS de Meta
+- Asegúte de tener consentimiento explícito del administrador de la cuenta
+- Asegúrate de tener permisos para descargar el contenido
+- Cumple con las leyes locales de derechos de autor
+- Implementa políticas de uso y procesos de takedown
+
+## Limitaciones
+
+- Las cookies pueden expirar en cualquier momento
+- Facebook puede invalidar cookies por actividad sospechosa
+- Las URLs de video pueden expirar rápidamente
+- Rate limiting: no uses masivamente para evitar bloqueos
+- Si la cuenta tiene 2FA, las cookies pueden ser más susceptibles a invalidación
+
+## Swagger API Documentation
+
+Cuando el servidor está corriendo en modo desarrollo, visita:
+
+```
+http://localhost:3020/api
+```
+
+## Desarrollo
 
 ```bash
-# unit tests
-$ npm run test
+# Development watch mode
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
+# Production build
+npm run build
+npm run start:prod
 
-# test coverage
-$ npm run test:cov
+# Run tests
+npm run test
+npm run test:e2e
+npm run test:cov
 ```
 
-## Deployment
+## Proyecto Base
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Proyecto creado con [NestJS](https://nestjs.com/) framework.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Licencia
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+MIT licensed.
