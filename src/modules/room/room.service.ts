@@ -90,24 +90,19 @@ export class RoomService extends TypeOrmCrudService<Room> {
 
       const result = await this.scraper.extractVideoUrlFromFacebook(video.facebookUrl);
       
-      this.logger.log(`Extraction result for video ${videoId}:`, {
-        success: result.success,
-        hasVideoUrl: !!result.videoUrl,
-        hasAudioUrl: !!result.audioUrl,
-        audioUrl: result.audioUrl,
-      });
-      
       if (!result.success || !result.videoUrl) {
         throw new Error(result.error || 'No video URL found');
       }
 
       video.videoUrl = result.videoUrl;
+      if (result.title) {
+        video.title = result.title;
+      }
 
       const videoPath = await this.downloadVideo(result.videoUrl, videoId);
       
       let finalPath = videoPath;
       if (result.audioUrl) {
-        this.logger.log(`Audio URL found for video ${videoId}: ${result.audioUrl}`);
         try {
           const audioPath = await this.downloadAudio(result.audioUrl, videoId);
           finalPath = await this.combineVideoAudio(videoPath, audioPath, videoId);
@@ -116,8 +111,6 @@ export class RoomService extends TypeOrmCrudService<Room> {
         } catch (audioError) {
           this.logger.error(`Error processing audio for video ${videoId}:`, audioError);
         }
-      } else {
-        this.logger.warn(`No audio URL found for video ${videoId}`);
       }
       
       video.localPath = finalPath;
@@ -147,6 +140,17 @@ export class RoomService extends TypeOrmCrudService<Room> {
     return `http://${host}:${port}/videos/${fileName}`;
   }
 
+  async markVideoAsWatched(videoId: number): Promise<RoomVideo | null> {
+    const video = await this.roomVideoRepo.findOne({ where: { id: videoId } });
+    if (!video) {
+      return null;
+    }
+
+    video.watched = true;
+    await this.roomVideoRepo.save(video);
+    return video;
+  }
+
   private async downloadVideo(url: string, videoId: number): Promise<string> {
     const videosDir = path.join(process.cwd(), 'videos');
     
@@ -157,9 +161,9 @@ export class RoomService extends TypeOrmCrudService<Room> {
     const fileName = `video_${videoId}_${Date.now()}.mp4`;
     const filePath = path.join(videosDir, fileName);
 
-    this.logger.log(`Downloading video ${videoId} from ${url.substring(0, 100)}...`);
+      this.logger.log(`Downloading video ${videoId}...`);
 
-    try {
+      try {
       const response = await axios.get(url, {
         responseType: 'stream',
         timeout: 300000,
@@ -202,9 +206,9 @@ export class RoomService extends TypeOrmCrudService<Room> {
     const fileName = `audio_${videoId}_${Date.now()}.m4a`;
     const filePath = path.join(videosDir, fileName);
 
-    this.logger.log(`Downloading audio ${videoId} from ${url.substring(0, 100)}...`);
+      this.logger.log(`Downloading audio ${videoId}...`);
 
-    try {
+      try {
       const response = await axios.get(url, {
         responseType: 'stream',
         timeout: 300000,
@@ -223,8 +227,7 @@ export class RoomService extends TypeOrmCrudService<Room> {
 
       return new Promise((resolve, reject) => {
         writer.on('finish', () => {
-          const stats = fs.statSync(filePath);
-          this.logger.log(`Audio ${videoId} downloaded successfully to ${filePath} (${stats.size} bytes)`);
+          this.logger.log(`Audio ${videoId} downloaded successfully`);
           resolve(filePath);
         });
         writer.on('error', (err) => {
@@ -243,11 +246,7 @@ export class RoomService extends TypeOrmCrudService<Room> {
     const outputFileName = `combined_${videoId}_${Date.now()}.mp4`;
     const outputPath = path.join(videosDir, outputFileName);
 
-    const videoStats = fs.statSync(videoPath);
-    const audioStats = fs.statSync(audioPath);
-    this.logger.log(`Combining video and audio for ${videoId}...`);
-    this.logger.log(`Video file: ${videoPath} (${videoStats.size} bytes)`);
-    this.logger.log(`Audio file: ${audioPath} (${audioStats.size} bytes)`);
+      this.logger.log(`Combining video and audio for ${videoId}...`);
 
     try {
       const ffmpegPath = process.platform === 'win32' 
@@ -261,17 +260,13 @@ export class RoomService extends TypeOrmCrudService<Room> {
       const audioPathEscaped = escapePath(audioPath);
       const outputPathEscaped = escapePath(outputPath);
       
-      const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -i ${audioPathEscaped} -c:v libx264 -preset fast -crf 23 -profile:v baseline -level 3.0 -c:a aac -profile:a aac_low -b:a 128k -ar 44100 -ac 2 -map 0:v:0 -map 1:a:0 -shortest -movflags +faststart ${outputPathEscaped}`;
-      
-      this.logger.log(`Running FFmpeg command: ${ffmpegCommand}`);
-      const { stdout, stderr } = await execAsync(ffmpegCommand);
-      
-      if (stdout) this.logger.log(`FFmpeg stdout: ${stdout}`);
-      if (stderr) this.logger.log(`FFmpeg stderr: ${stderr}`);
-      
-      const outputStats = fs.statSync(outputPath);
-      this.logger.log(`Video and audio combined successfully: ${outputPath} (${outputStats.size} bytes)`);
-      return outputPath;
+        const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -i ${audioPathEscaped} -c:v libx264 -preset fast -crf 23 -profile:v baseline -level 3.0 -c:a aac -profile:a aac_low -b:a 128k -ar 44100 -ac 2 -map 0:v:0 -map 1:a:0 -shortest -movflags +faststart ${outputPathEscaped}`;
+        
+        this.logger.log(`Running FFmpeg: ${ffmpegCommand}`);
+        await execAsync(ffmpegCommand);
+        
+        this.logger.log(`Video and audio combined successfully`);
+        return outputPath;
     } catch (error) {
       this.logger.error(`Error combining video and audio:`, error);
       return videoPath;

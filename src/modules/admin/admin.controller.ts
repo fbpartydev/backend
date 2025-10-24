@@ -34,7 +34,7 @@ import { FacebookScraperService } from 'src/Services/facebook-scraper.service';
     },
     createOneBase: {
       interceptors: [],
-      decorators: [ApiBearerAuth(), UseGuards(AdminGuard)],
+      decorators: [],
     },
     createManyBase: {
       interceptors: [],

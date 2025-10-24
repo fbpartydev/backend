@@ -66,7 +66,7 @@ export class FacebookScraperService {
 
   public async extractVideoUrlFromFacebook(
     pageUrl: string
-  ): Promise<{ success: boolean; videoUrl?: string; audioUrl?: string; error?: string; candidates?: string[] }> {
+  ): Promise<{ success: boolean; videoUrl?: string; audioUrl?: string; title?: string; error?: string; candidates?: string[] }> {
     const cookies = await this.getStoredCookies();
     if (!cookies) return { success: false, error: 'No cookie stored' };
 
@@ -81,34 +81,96 @@ export class FacebookScraperService {
       
       const videoUrls: string[] = [];
       const audioUrls: string[] = [];
+      
       await page.setRequestInterception(true);
       page.on('request', (request) => {
         const url = request.url();
-        if (url.includes('.mp4') && url.includes('fbcdn.net')) {
-          if (url.includes('/m412/') || url.includes('heaac') || url.includes('_audio')) {
-            audioUrls.push(url);
-          } else {
-            videoUrls.push(url);
+        if ((url.includes('.mp4') || url.includes('.m4a')) && url.includes('fbcdn.net')) {
+          const efgMatch = url.match(/efg=([^&]+)/);
+          let isAudio = false;
+          
+          if (efgMatch) {
+            try {
+              const urlDecoded = decodeURIComponent(efgMatch[1]);
+              const base64Decoded = Buffer.from(urlDecoded, 'base64').toString('utf-8');
+              if (base64Decoded.includes('audio') || base64Decoded.includes('heaac')) {
+                isAudio = true;
+              }
+            } catch (e) {}
           }
-        }
-        if (url.includes('.m4a') && url.includes('fbcdn.net')) {
-          audioUrls.push(url);
+          
+          if (!isAudio && (url.includes('/m412/') || url.includes('/m4a'))) {
+            isAudio = true;
+          }
+          
+          if (isAudio) {
+            if (!audioUrls.includes(url)) {
+              audioUrls.push(url);
+            }
+          } else {
+            if (!videoUrls.includes(url)) {
+              videoUrls.push(url);
+            }
+          }
         }
         request.continue();
       });
-
+      
       await page.setCookie(...cookies);
       await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      const title = await page.evaluate(() => {
+        const video = document.querySelector('video');
+        if (!video) return null;
+
+        let container = video.parentElement;
+        let attempts = 0;
+        
+        while (container && attempts < 15) {
+          const titleSpan = container.querySelector('span.x1lliihq.x6ikm8r.x10wlt62.x1n2onr6.xlyipyv.xuxw1ft');
+          if (titleSpan && titleSpan.textContent) {
+            const text = titleSpan.textContent.trim();
+            
+            if (text.length > 5 && 
+                !text.includes('Me gusta') && 
+                !text.includes('Comentar') && 
+                !text.includes('Compartir') &&
+                !text.includes('Buscar') &&
+                !text.includes('Reproducir') &&
+                !text.includes('Configuración') &&
+                !text.includes('Subtítulos') &&
+                !text.includes('pantalla completa') &&
+                !text.includes('visualizaciones') &&
+                !text.includes('comentarios') &&
+                !text.match(/^\d+:\d+$/)) {
+              return text;
+            }
+          }
+
+          container = container.parentElement;
+          attempts++;
+        }
+
+        const titleElement = document.querySelector('meta[property="og:title"]');
+        if (titleElement) {
+          const content = titleElement.getAttribute('content');
+          if (content && !content.includes('Facebook')) {
+            return content;
+          }
+        }
+
+        return null;
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       try {
         const videoElement = await page.$('video');
         if (videoElement) {
+          await videoElement.scrollIntoView();
+          await new Promise(resolve => setTimeout(resolve, 1000));
           await videoElement.click();
-          this.logger.log('Clicked video element, waiting for audio to load...');
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          this.logger.log(`After click - Video URLs: ${videoUrls.length}, Audio URLs: ${audioUrls.length}`);
+          await new Promise(resolve => setTimeout(resolve, 12000));
         }
       } catch (e) {
         this.logger.warn('Could not click video element');
@@ -134,42 +196,82 @@ export class FacebookScraperService {
         return null;
       });
 
+      const extractMetadata = (url: string) => {
+        const efgMatch = url.match(/efg=([^&]+)/);
+        if (efgMatch) {
+          try {
+            const urlDecoded = decodeURIComponent(efgMatch[1]);
+            const base64Decoded = Buffer.from(urlDecoded, 'base64').toString('utf-8');
+            const json = JSON.parse(base64Decoded);
+            return {
+              videoId: json.video_id?.toString(),
+              assetId: json.xpv_asset_id?.toString(),
+              duration: json.duration_s,
+            };
+          } catch (e) {
+            this.logger.error('Error parsing efg:', e.message);
+          }
+        }
+        return { videoId: null, assetId: null, duration: null };
+      };
+
+      this.logger.log(`Intercepted: ${videoUrls.length} videos, ${audioUrls.length} audios`);
+
       if (videoSrc && !videoSrc.includes('m3u8')) {
         const cleanUrl = this.removeRangeParams(videoSrc);
-        this.logger.log(`Found video src from element: ${cleanUrl}`);
+        const videoMeta = extractMetadata(videoSrc);
         
-        this.logger.log(`Checking ${audioUrls.length} audio URLs for this strategy`);
         let audioUrl: string | undefined;
+        
         if (audioUrls.length > 0) {
-          this.logger.log('Audio URLs in strategy 1:', audioUrls);
-          audioUrl = this.removeRangeParams(audioUrls[0]);
-          this.logger.log(`Found audio URL: ${audioUrl}`);
+          const matchingAudio = audioUrls.find(aUrl => {
+            const aMeta = extractMetadata(aUrl);
+            return (videoMeta.videoId && aMeta.videoId === videoMeta.videoId) ||
+                   (videoMeta.assetId && aMeta.assetId === videoMeta.assetId);
+          });
+          
+          if (matchingAudio) {
+            audioUrl = this.removeRangeParams(matchingAudio);
+            const audioMeta = extractMetadata(matchingAudio);
+            this.logger.log(`✓ Matched: Video [${videoMeta.videoId}] ${videoMeta.duration}s + Audio [${audioMeta.videoId}] ${audioMeta.duration}s`);
+          } else if (audioUrls.length > 0) {
+            audioUrl = this.removeRangeParams(audioUrls[0]);
+            const audioMeta = extractMetadata(audioUrls[0]);
+            this.logger.warn(`⚠ No match: Video [${videoMeta.videoId}] ${videoMeta.duration}s + Audio [${audioMeta.videoId}] ${audioMeta.duration}s (fallback)`);
+          }
         }
         
-        return { success: true, videoUrl: cleanUrl, audioUrl };
+        return { success: true, videoUrl: cleanUrl, audioUrl, title: title ?? undefined };
       }
 
       if (videoUrls.length > 0) {
-        this.logger.log(`Found ${videoUrls.length} video URLs intercepted`);
-        this.logger.log(`Found ${audioUrls.length} audio URLs intercepted`);
-        
         const mp4Urls = videoUrls.filter(url => url.includes('.mp4') && !url.includes('m3u8'));
-        this.logger.log(`Filtered to ${mp4Urls.length} MP4 URLs`);
-        
-        this.logger.log('All intercepted URLs (first 20):', videoUrls.slice(0, 20));
-        this.logger.log('Audio URLs intercepted:', audioUrls);
         
         if (mp4Urls.length > 0) {
           const cleanUrl = this.removeRangeParams(mp4Urls[0]);
+          const videoMeta = extractMetadata(mp4Urls[0]);
           
           let audioUrl: string | undefined;
+          
           if (audioUrls.length > 0) {
-            const cleanAudioUrl = this.removeRangeParams(audioUrls[0]);
-            audioUrl = cleanAudioUrl;
-            this.logger.log(`Using audio URL: ${audioUrl}`);
+            const matchingAudio = audioUrls.find(aUrl => {
+              const aMeta = extractMetadata(aUrl);
+              return (videoMeta.videoId && aMeta.videoId === videoMeta.videoId) ||
+                     (videoMeta.assetId && aMeta.assetId === videoMeta.assetId);
+            });
+            
+            if (matchingAudio) {
+              audioUrl = this.removeRangeParams(matchingAudio);
+              const audioMeta = extractMetadata(matchingAudio);
+              this.logger.log(`✓ Matched: Video [${videoMeta.videoId}] ${videoMeta.duration}s + Audio [${audioMeta.videoId}] ${audioMeta.duration}s`);
+            } else if (audioUrls.length > 0) {
+              audioUrl = this.removeRangeParams(audioUrls[0]);
+              const audioMeta = extractMetadata(audioUrls[0]);
+              this.logger.warn(`⚠ No match: Video [${videoMeta.videoId}] ${videoMeta.duration}s + Audio [${audioMeta.videoId}] ${audioMeta.duration}s (fallback)`);
+            }
           }
           
-          return { success: true, videoUrl: cleanUrl, audioUrl, candidates: mp4Urls };
+          return { success: true, videoUrl: cleanUrl, audioUrl, title: title ?? undefined, candidates: mp4Urls };
         }
       }
 
@@ -196,7 +298,7 @@ export class FacebookScraperService {
           }
         }
         
-        return { success: true, videoUrl: cleanUrl, audioUrl, candidates: videoMatches };
+        return { success: true, videoUrl: cleanUrl, audioUrl, title: title ?? undefined, candidates: videoMatches };
       }
 
       const jsonPatterns = [
@@ -247,7 +349,7 @@ export class FacebookScraperService {
       }
 
       if (foundVideoUrl) {
-        return { success: true, videoUrl: foundVideoUrl, audioUrl: foundAudioUrl };
+        return { success: true, videoUrl: foundVideoUrl, audioUrl: foundAudioUrl, title: title ?? undefined };
       }
 
       const windowData = await page.evaluate(() => {
@@ -259,25 +361,11 @@ export class FacebookScraperService {
         const dataMatches = dataStr.match(/https?:\/\/[^"'\s]+\.fbcdn\.net\/[^"'\s]+\.mp4/g);
         if (dataMatches && dataMatches.length > 0) {
           const cleanUrl = this.removeRangeParams(dataMatches[0]);
-          return { success: true, videoUrl: cleanUrl, candidates: dataMatches };
+          return { success: true, videoUrl: cleanUrl, title: title ?? undefined, candidates: dataMatches };
         }
       }
 
-      this.logger.warn('Failed to find video URL', { 
-        pageUrl, 
-        totalVideoUrls: videoUrls.length,
-        totalAudioUrls: audioUrls.length,
-        htmlLength: html.length 
-      });
-      
-      if (videoUrls.length > 0) {
-        this.logger.log('Video URLs intercepted (first 5):', videoUrls.slice(0, 5));
-      }
-      if (audioUrls.length > 0) {
-        this.logger.log('Audio URLs intercepted (first 5):', audioUrls.slice(0, 5));
-      } else {
-        this.logger.warn('NO AUDIO URLs intercepted - this video might not have separate audio track');
-      }
+      this.logger.warn(`Failed to extract video from ${pageUrl}`);
       
       return { success: false, error: 'No video URL found' };
     } catch (err) {

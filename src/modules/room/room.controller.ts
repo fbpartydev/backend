@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, BadRequestException, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Crud, CrudController } from '@dataui/crud';
 import { Room } from '../../entities/room.entity';
@@ -96,6 +96,18 @@ export class RoomController implements CrudController<Room> {
       throw new BadRequestException('Video not available');
     }
     return { publicUrl: url };
+  }
+
+  @Patch('videos/:videoId/mark-watched')
+  @ApiOperation({ summary: 'Marcar video como visto' })
+  @ApiResponse({ status: 200, description: 'Video marcado como visto' })
+  @ApiResponse({ status: 404, description: 'Video no encontrado' })
+  async markVideoAsWatched(@Param('videoId') videoId: number): Promise<any> {
+    const video = await this.service.markVideoAsWatched(videoId);
+    if (!video) {
+      throw new BadRequestException('Video not found');
+    }
+    return video;
   }
 }
 

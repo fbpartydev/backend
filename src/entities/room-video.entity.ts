@@ -5,10 +5,16 @@ import { Room } from './room.entity';
 @Entity('room_video')
 export class RoomVideo extends CoreEntity {
   @Column({ type: 'text' })
-  facebookUrl: string; // URL original de Facebook
+  facebookUrl: string;
 
   @Column({ type: 'text', nullable: true })
-  videoUrl?: string; // URL del video extraída (mp4)
+  title?: string;
+
+  @Column({ type: 'text', nullable: true })
+  videoUrl?: string;
+
+  @Column({ default: false })
+  watched: boolean;
 
   @Column({ type: 'text', nullable: true })
   localPath?: string; // ruta local del video descargado
