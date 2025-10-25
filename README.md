@@ -10,38 +10,11 @@ Este sistema permite:
 - Descargar videos y audios por separado (sin FFmpeg)
 - Crear salas para organizar múltiples videos
 - Servir videos y audios por separado a través de una API REST
-- Generar thumbnails usando FFmpeg (opcional)
+- Generar thumbnails usando Puppeteer (sin FFmpeg)
 
 ## Prerequisitos
 
-### 1. FFmpeg (Opcional - solo para thumbnails)
-
-FFmpeg se usa únicamente para generar thumbnails de los videos. Los videos y audios se sirven por separado.
-
-**Windows:**
-```powershell
-winget install ffmpeg
-```
-
-O descarga manual desde: https://www.gyan.dev/ffmpeg/builds/
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt update
-sudo apt install ffmpeg
-```
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Verificar instalación:**
-```bash
-ffmpeg -version
-```
-
-### 2. Node.js y npm
+### 1. Node.js y npm
 
 Requerido Node.js 18+ y npm 9+
 
@@ -229,15 +202,15 @@ Retorna la sala con todos sus videos procesados.
 1. Se extrae la URL del video desde Facebook usando Puppeteer
 2. Se detecta y descarga el stream de audio separado
 3. Se descargan video y audio por separado (sin combinar)
-4. Se genera thumbnail usando FFmpeg (10mo segundo para evitar frames negros)
+4. Se genera thumbnail usando Puppeteer (10mo segundo para evitar frames negros)
 5. Se sirven video y audio por separado al frontend
 
 ### Compatibilidad Multi-Plataforma
 
-El sistema detecta automáticamente la plataforma y ajusta:
-- **Windows**: Ruta completa a `C:\ffmpeg\bin\ffmpeg.exe`
-- **Linux/Mac**: Usa `ffmpeg` del PATH
-- Escapa rutas correctamente según el SO
+El sistema funciona en cualquier plataforma con Node.js:
+- **Windows**: Funciona nativamente
+- **Linux/Mac**: Funciona nativamente
+- **Sin dependencias externas**: Solo Node.js y Puppeteer
 
 ## Seguridad
 

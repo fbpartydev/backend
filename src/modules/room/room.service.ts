@@ -329,22 +329,39 @@ export class RoomService extends TypeOrmCrudService<Room> {
     const thumbnailPath = path.join(videosDir, thumbnailFileName);
 
     try {
-      const ffmpegPath = process.platform === 'win32' 
-        ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' 
-        : 'ffmpeg';
+      const puppeteer = require('puppeteer');
+      const browser = await puppeteer.launch({ 
+        headless: true, 
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+      });
       
-      const isWindows = process.platform === 'win32';
-      const escapePath = (path: string) => isWindows ? `"${path}"` : path.replace(/ /g, '\\ ');
+      const page = await browser.newPage();
       
-      const videoPathEscaped = escapePath(videoPath);
-      const thumbnailPathEscaped = escapePath(thumbnailPath);
+      const videoUrl = `file://${videoPath}`;
+      await page.goto(videoUrl, { waitUntil: 'networkidle2', timeout: 30000 });
       
-      const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -ss 00:00:10 -vframes 1 -q:v 2 ${thumbnailPathEscaped}`;
+      await page.evaluate(() => {
+        const video = document.querySelector('video');
+        if (video) {
+          video.currentTime = 10;
+          return new Promise(resolve => {
+            video.addEventListener('seeked', resolve, { once: true });
+          });
+        }
+      });
       
-      this.logger.log(`Generating thumbnail: ${ffmpegCommand}`);
-      await execAsync(ffmpegCommand);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      this.logger.log(`Thumbnail generated successfully`);
+      const screenshot = await page.screenshot({ 
+        type: 'jpeg', 
+        quality: 80,
+        fullPage: false 
+      });
+      
+      await browser.close();
+      
+      fs.writeFileSync(thumbnailPath, screenshot);
+      this.logger.log(`Thumbnail generated successfully: ${thumbnailPath}`);
       return thumbnailPath;
     } catch (error) {
       this.logger.error(`Error generating thumbnail:`, error);
