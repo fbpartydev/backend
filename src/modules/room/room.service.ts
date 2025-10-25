@@ -105,6 +105,7 @@ export class RoomService extends TypeOrmCrudService<Room> {
     }
 
     try {
+      this.logger.log(`Started processing for video ${videoId} with code ${video.code}`);
       video.status = 'processing';
       video.error = null;
       await this.roomVideoRepo.save(video);
@@ -116,35 +117,39 @@ export class RoomService extends TypeOrmCrudService<Room> {
       }
 
       video.videoUrl = result.videoUrl;
+      video.audioUrl = result.audioUrl;
       if (result.title) {
         video.title = result.title;
       }
 
       const videoPath = await this.downloadVideo(result.videoUrl, videoId);
+      video.localVideoPath = videoPath;
       
-      let finalPath = videoPath;
+      let audioPath: string | null = null;
       if (result.audioUrl) {
         try {
-          const audioPath = await this.downloadAudio(result.audioUrl, videoId);
-          finalPath = await this.combineVideoAudio(videoPath, audioPath, videoId);
-          if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-          if (fs.existsSync(videoPath) && finalPath !== videoPath) fs.unlinkSync(videoPath);
+          audioPath = await this.downloadAudio(result.audioUrl, videoId);
+          video.localAudioPath = audioPath;
         } catch (audioError) {
-          this.logger.error(`Error processing audio for video ${videoId}:`, audioError);
+          this.logger.error(`Error downloading audio for video ${videoId}:`, audioError);
         }
       }
       
-      video.localPath = finalPath;
-      
-      const thumbnailPath = await this.generateThumbnail(finalPath, videoId);
+      const thumbnailPath = await this.generateThumbnail(videoPath, videoId);
       if (thumbnailPath) {
         video.thumbnailPath = thumbnailPath;
       }
       
-      const fileName = path.basename(finalPath);
       const port = process.env.PORT || 3020;
       const host = process.env.HOST || 'localhost';
-      video.publicUrl = `http://${host}:${port}/videos/${fileName}`;
+      
+      const videoFileName = path.basename(videoPath);
+      video.publicVideoUrl = `http://${host}:${port}/videos/${videoFileName}`;
+      
+      if (audioPath) {
+        const audioFileName = path.basename(audioPath);
+        video.publicAudioUrl = `http://${host}:${port}/videos/${audioFileName}`;
+      }
       
       if (thumbnailPath) {
         const thumbnailFileName = path.basename(thumbnailPath);
@@ -166,28 +171,17 @@ export class RoomService extends TypeOrmCrudService<Room> {
     }
   }
 
-  async getVideoPublicUrl(videoId: number): Promise<string | null> {
+  async getVideoPublicUrls(videoId: number): Promise<{ videoUrl: string | null; audioUrl: string | null; thumbnailUrl: string | null }> {
     const video = await this.roomVideoRepo.findOne({ where: { id: videoId } });
-    if (!video || !video.localPath) {
-      return null;
+    if (!video) {
+      return { videoUrl: null, audioUrl: null, thumbnailUrl: null };
     }
 
-    const fileName = path.basename(video.localPath);
-    const port = process.env.PORT || 3020;
-    const host = process.env.HOST || 'localhost';
-    return `http://${host}:${port}/videos/${fileName}`;
-  }
-
-  async getThumbnailPublicUrl(videoId: number): Promise<string | null> {
-    const video = await this.roomVideoRepo.findOne({ where: { id: videoId } });
-    if (!video || !video.thumbnailPath) {
-      return null;
-    }
-
-    const fileName = path.basename(video.thumbnailPath);
-    const port = process.env.PORT || 3020;
-    const host = process.env.HOST || 'localhost';
-    return `http://${host}:${port}/videos/${fileName}`;
+    return {
+      videoUrl: video.publicVideoUrl || null,
+      audioUrl: video.publicAudioUrl || null,
+      thumbnailUrl: video.thumbnailUrl || null,
+    };
   }
 
   async markVideoAsWatched(videoId: number): Promise<RoomVideo | null> {
@@ -207,12 +201,21 @@ export class RoomService extends TypeOrmCrudService<Room> {
       return false;
     }
 
-    if (video.localPath && fs.existsSync(video.localPath)) {
+    if (video.localVideoPath && fs.existsSync(video.localVideoPath)) {
       try {
-        fs.unlinkSync(video.localPath);
-        this.logger.log(`Deleted video file: ${video.localPath}`);
+        fs.unlinkSync(video.localVideoPath);
+        this.logger.log(`Deleted video file: ${video.localVideoPath}`);
       } catch (error) {
-        this.logger.error(`Error deleting video file: ${video.localPath}`, error);
+        this.logger.error(`Error deleting video file: ${video.localVideoPath}`, error);
+      }
+    }
+
+    if (video.localAudioPath && fs.existsSync(video.localAudioPath)) {
+      try {
+        fs.unlinkSync(video.localAudioPath);
+        this.logger.log(`Deleted audio file: ${video.localAudioPath}`);
+      } catch (error) {
+        this.logger.error(`Error deleting audio file: ${video.localAudioPath}`, error);
       }
     }
 
@@ -319,37 +322,6 @@ export class RoomService extends TypeOrmCrudService<Room> {
     }
   }
 
-  private async combineVideoAudio(videoPath: string, audioPath: string, videoId: number): Promise<string> {
-    const videosDir = path.join(process.cwd(), 'videos');
-    const outputFileName = `combined_${videoId}_${Date.now()}.mp4`;
-    const outputPath = path.join(videosDir, outputFileName);
-
-      this.logger.log(`Combining video and audio for ${videoId}...`);
-
-    try {
-      const ffmpegPath = process.platform === 'win32' 
-        ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' 
-        : 'ffmpeg';
-      
-      const isWindows = process.platform === 'win32';
-      const escapePath = (path: string) => isWindows ? `"${path}"` : path.replace(/ /g, '\\ ');
-      
-      const videoPathEscaped = escapePath(videoPath);
-      const audioPathEscaped = escapePath(audioPath);
-      const outputPathEscaped = escapePath(outputPath);
-      
-        const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -i ${audioPathEscaped} -c:v libx264 -preset fast -crf 23 -profile:v baseline -level 3.0 -c:a aac -profile:a aac_low -b:a 128k -ar 44100 -ac 2 -map 0:v:0 -map 1:a:0 -shortest -movflags +faststart ${outputPathEscaped}`;
-        
-        this.logger.log(`Running FFmpeg: ${ffmpegCommand}`);
-        await execAsync(ffmpegCommand);
-        
-        this.logger.log(`Video and audio combined successfully`);
-        return outputPath;
-    } catch (error) {
-      this.logger.error(`Error combining video and audio:`, error);
-      return videoPath;
-    }
-  }
 
   private async generateThumbnail(videoPath: string, videoId: number): Promise<string | null> {
     const videosDir = path.join(process.cwd(), 'videos');
@@ -367,7 +339,7 @@ export class RoomService extends TypeOrmCrudService<Room> {
       const videoPathEscaped = escapePath(videoPath);
       const thumbnailPathEscaped = escapePath(thumbnailPath);
       
-      const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -ss 00:00:01 -vframes 1 -q:v 2 ${thumbnailPathEscaped}`;
+      const ffmpegCommand = `${ffmpegPath} -i ${videoPathEscaped} -ss 00:00:10 -vframes 1 -q:v 2 ${thumbnailPathEscaped}`;
       
       this.logger.log(`Generating thumbnail: ${ffmpegCommand}`);
       await execAsync(ffmpegCommand);

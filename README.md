@@ -7,15 +7,16 @@ Backend para descargar y servir videos de Facebook (incluyendo videos privados) 
 Este sistema permite:
 - Guardar cookies de Facebook encriptadas (AES-256-GCM)
 - Extraer URLs de videos de Facebook usando Puppeteer
-- Descargar videos con audio completo usando FFmpeg
+- Descargar videos y audios por separado (sin FFmpeg)
 - Crear salas para organizar múltiples videos
-- Servir videos a través de una API REST
+- Servir videos y audios por separado a través de una API REST
+- Generar thumbnails usando FFmpeg (opcional)
 
 ## Prerequisitos
 
-### 1. FFmpeg (Requerido)
+### 1. FFmpeg (Opcional - solo para thumbnails)
 
-El sistema requiere FFmpeg para combinar el video y audio que Facebook sirve por separado.
+FFmpeg se usa únicamente para generar thumbnails de los videos. Los videos y audios se sirven por separado.
 
 **Windows:**
 ```powershell
@@ -227,10 +228,9 @@ Retorna la sala con todos sus videos procesados.
 
 1. Se extrae la URL del video desde Facebook usando Puppeteer
 2. Se detecta y descarga el stream de audio separado
-3. Se combinan video y audio usando FFmpeg con:
-   - Codec H.264 Baseline Profile (compatible con navegadores)
-   - Codec AAC-LC (audio de alta calidad)
-   - Fast start para streaming
+3. Se descargan video y audio por separado (sin combinar)
+4. Se genera thumbnail usando FFmpeg (10mo segundo para evitar frames negros)
+5. Se sirven video y audio por separado al frontend
 
 ### Compatibilidad Multi-Plataforma
 

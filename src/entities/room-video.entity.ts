@@ -16,17 +16,26 @@ export class RoomVideo extends CoreEntity {
   @Column({ type: 'text', nullable: true })
   videoUrl?: string;
 
+  @Column({ type: 'text', nullable: true })
+  audioUrl?: string;
+
   @Column({ default: false })
   watched: boolean;
 
   @Column({ type: 'text', nullable: true })
-  localPath?: string;
+  localVideoPath?: string;
+
+  @Column({ type: 'text', nullable: true })
+  localAudioPath?: string;
 
   @Column({ type: 'text', nullable: true })
   thumbnailPath?: string;
 
   @Column({ type: 'text', nullable: true })
-  publicUrl?: string;
+  publicVideoUrl?: string;
+
+  @Column({ type: 'text', nullable: true })
+  publicAudioUrl?: string;
 
   @Column({ type: 'text', nullable: true })
   thumbnailUrl?: string;

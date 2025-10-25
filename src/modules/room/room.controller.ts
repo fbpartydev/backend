@@ -110,16 +110,15 @@ export class RoomController implements CrudController<Room> {
     return await this.service.processVideo(videoId);
   }
 
-  @Get('videos/:videoId/public-url')
-  @ApiOperation({ summary: 'Obtener URL pública del video y thumbnail' })
+  @Get('videos/:videoId/public-urls')
+  @ApiOperation({ summary: 'Obtener URLs públicas del video, audio y thumbnail' })
   @ApiResponse({ status: 200, description: 'URLs públicas' })
-  async getVideoPublicUrl(@Param('videoId') videoId: number): Promise<any> {
-    const url = await this.service.getVideoPublicUrl(videoId);
-    if (!url) {
+  async getVideoPublicUrls(@Param('videoId') videoId: number): Promise<any> {
+    const urls = await this.service.getVideoPublicUrls(videoId);
+    if (!urls.videoUrl) {
       throw new BadRequestException('Video not available');
     }
-    const thumbnailUrl = await this.service.getThumbnailPublicUrl(videoId);
-    return { publicUrl: url, thumbnailUrl };
+    return urls;
   }
 
   @Patch('videos/:videoId/mark-watched')
