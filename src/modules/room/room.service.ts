@@ -139,21 +139,21 @@ export class RoomService extends TypeOrmCrudService<Room> {
       if (thumbnailPath) {
         video.thumbnailPath = thumbnailPath;
       }
-      
+
       const port = process.env.PORT || 3020;
-      const host = process.env.HOST || 'localhost';
-      
+      const host = process.env.HOST || 'http://localhost:' + port;
+
       const videoFileName = path.basename(videoPath);
-      video.publicVideoUrl = `http://${host}:${port}/videos/${videoFileName}`;
+      video.publicVideoUrl = `${host}videos/${videoFileName}`;
       
       if (audioPath) {
         const audioFileName = path.basename(audioPath);
-        video.publicAudioUrl = `http://${host}:${port}/videos/${audioFileName}`;
+        video.publicAudioUrl = `${host}videos/${audioFileName}`;
       }
       
       if (thumbnailPath) {
         const thumbnailFileName = path.basename(thumbnailPath);
-        video.thumbnailUrl = `http://${host}:${port}/videos/${thumbnailFileName}`;
+        video.thumbnailUrl = `${host}videos/${thumbnailFileName}`;
       }
       
       video.status = 'completed';
