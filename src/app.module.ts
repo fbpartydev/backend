@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { getAllModules } from './core/load-modules';
+import { WebsocketModule } from './modules/websocket/websocket.module';
 
 export const PATH_ROOT = __dirname;
 require('dotenv/config');
@@ -27,6 +28,7 @@ require('dotenv/config');
       },
     }),
     ...getAllModules(),
+    WebsocketModule,
   ],
   controllers: [AppController],
   providers: [AppService],
