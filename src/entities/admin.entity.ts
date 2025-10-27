@@ -31,12 +31,13 @@ export class AdminEntity extends CoreEntity {
   }
 
   get generateToken() {
-    const { id, email, role } = this;
+    const { id, email, role, name } = this;
     return jwt.sign(
       {
         id,
         email,
         role,
+        name,
       },
       process.env.SECRET_ADMIN,
     );

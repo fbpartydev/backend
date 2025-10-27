@@ -6,7 +6,7 @@ import { JoinRoomDto, PlayerEventDto, ChatMessageDto } from './dto/websocket.dto
 import { RoomService } from 'src/modules/room/room.service';
 
 interface AuthenticatedSocket extends Socket {
-  user?: { id: string; email: string; role: string }; // 'user' es opcional aquí
+  user?: { id: string; email: string; role: string; name: string }; // 'user' es opcional aquí
 }
 
 @UseGuards(WsAuthGuard)
@@ -55,10 +55,11 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
     this.logger.log(`Cliente ${client.user.email} intentando unirse a la sala ${data.roomId} con video ${data.videoCode}`);
     
-    const room = await this.roomService.getRoomByCode(data.videoCode); // Suponiendo que videoCode es el código de la sala aquí
+    // Buscar la sala por ID, no por código
+    const room = await this.roomService.findOne({ where: { id: data.roomId } });
 
-    if (!room || room.id !== data.roomId) {
-      throw new WsException('Sala o código de video inválido.');
+    if (!room) {
+      throw new WsException('Sala no encontrada.');
     }
 
     client.join(`room-${data.roomId}`);
@@ -69,8 +70,8 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       type: 'user_join',
       timestamp: Date.now(),
       userId: client.user.id,
-      userName: client.user.email, // Usamos el email como nombre de usuario por ahora
-      data: { userId: client.user.id, userName: client.user.email },
+      userName: client.user.name,
+      data: { userId: client.user.id, userName: client.user.name },
     });
   }
 
@@ -81,9 +82,10 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
     this.logger.log(`Evento de reproductor recibido de ${client.user.email} para la sala ${data.roomId}: ${data.event.type}`);
 
-    const room = await this.roomService.getRoomByCode(data.event.data.videoCode); // Asumiendo que el videoCode está en event.data
-    if (!room || room.id !== data.roomId) {
-      throw new WsException('Sala o código de video inválido para el evento del reproductor.');
+    // Buscar la sala por ID para validar que existe
+    const room = await this.roomService.findOne({ where: { id: data.roomId } });
+    if (!room) {
+      throw new WsException('Sala no encontrada.');
     }
 
     // Difundir el evento del reproductor a todos en la sala, excluyendo al emisor
@@ -92,7 +94,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       event: {
         ...data.event,
         userId: client.user.id,
-        userName: client.user.email,
+        userName: client.user.name,
       },
     });
   }
@@ -104,9 +106,10 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
     this.logger.log(`Mensaje de chat recibido de ${client.user.email} para la sala ${data.roomId}: ${data.event.data.message}`);
     
-    const room = await this.roomService.getRoomByCode(data.event.data.videoCode); // Asumiendo que el videoCode está en event.data
-    if (!room || room.id !== data.roomId) {
-      throw new WsException('Sala o código de video inválido para el mensaje de chat.');
+    // Buscar la sala por ID para validar que existe
+    const room = await this.roomService.findOne({ where: { id: data.roomId } });
+    if (!room) {
+      throw new WsException('Sala no encontrada.');
     }
 
     // Difundir el mensaje de chat a todos en la sala, excluyendo al emisor
@@ -115,7 +118,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       event: {
         ...data.event,
         userId: client.user.id,
-        userName: client.user.email,
+        userName: client.user.name,
       },
     });
   }

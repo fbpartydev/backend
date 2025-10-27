@@ -47,6 +47,15 @@ export class CookieDto {
   expires?: number;
 
   @ApiProperty({
+    description: 'Fecha de expiración (Chrome export format)',
+    example: 1712345678,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  expirationDate?: number;
+
+  @ApiProperty({
     description: 'Cookie HTTP only',
     example: true,
     required: false,
@@ -67,12 +76,44 @@ export class CookieDto {
   @ApiProperty({
     description: 'SameSite policy',
     example: 'Lax',
-    enum: ['Strict', 'Lax', 'None'],
+    enum: ['Strict', 'Lax', 'None', 'no_restriction', 'unspecified'],
     required: false,
   })
   @IsOptional()
   @IsString()
-  sameSite?: 'Strict' | 'Lax' | 'None';
+  sameSite?: 'Strict' | 'Lax' | 'None' | 'no_restriction' | 'unspecified';
+
+  @ApiProperty({
+    description: 'Host only cookie (Chrome export)',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  hostOnly?: boolean;
+
+  @ApiProperty({
+    description: 'Session cookie (Chrome export)',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  session?: boolean;
+
+  @ApiProperty({
+    description: 'Store ID (Chrome export)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  storeId?: string;
+
+  @ApiProperty({
+    description: 'Cookie ID (Chrome export)',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  id?: number;
 }
 
 export class UploadCookieDto {

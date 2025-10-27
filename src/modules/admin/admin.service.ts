@@ -53,10 +53,12 @@ export class AdminService extends TypeOrmCrudService<AdminEntity> {
   }
 
   async uploadCookie(dto: UploadCookieDto): Promise<any> {
-    // Calcular expiresAt si alguna cookie tiene expires
+    // Calcular expiresAt si alguna cookie tiene expires o expirationDate
     const expires = dto.cookies.reduce((acc: number | null, c: any) => {
-      if (c.expires && Number(c.expires) > 0) {
-        const ex = Number(c.expires);
+      const expTime = c.expires || c.expirationDate;
+      if (expTime && Number(expTime) > 0) {
+        // Convert to integer (bigint requires whole numbers)
+        const ex = Math.floor(Number(expTime));
         return acc ? Math.min(acc, ex) : ex;
       }
       return acc;
